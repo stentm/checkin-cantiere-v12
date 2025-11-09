@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Check-in Cantiere v9.2</title>
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<style>
+  body::before {
+    content:"";
+    position:fixed;
+    top:0; left:0;
+    width:100vw; height:100vh;
+    background-image:url("bg.jpg");
+    background-size:cover;
+    background-position:center;
+    opacity:0.25;
+    z-index:-1;
+    pointer-events:none;
+  }
+  .container {
+    background:rgba(255,255,255,0.9);
+    max-width:600px;
+    margin:20px auto;
+    padding:20px;
+    border-radius:12px;
+  }
+  #reader {
+    width:100%;
+    max-width:350px;
+    height:350px;
+    margin:10px auto;
+    background:#000;
+  }
+  .hidden {display:none;}
+  label{font-weight:700;}
+  input{width:100%;padding:12px;margin:6px 0;font-size:18px;}
+  .btn{width:100%;padding:16px;font-size:18px;border:none;border-radius:8px;margin-top:12px;}
+  .scan{background:#007bff;color:#fff;}
+  .entry{background:#28a745;color:#fff;}
+  .exit{background:#dc3545;color:#fff;}
+  #success{color:#0a7a28;font-weight:700;}
+  #error{color:#b00020;font-weight:700;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>Registrazione Presenza</h2>
+  <div id="scanArea">
+    <button id="startScan" class="btn scan">Avvia scansione QR</button>
+    <div id="reader"></div>
+    <p id="scanMsg"></p>
+  </div>
+  <div id="formArea" class="hidden">
+    <label>Cantiere</label><input id="cantiere" readonly/>
+    <label>Nome e Cognome</label><input id="nome"/>
+    <label>Azienda</label><input id="azienda"/>
+    <button id="btnEntrata" class="btn entry">Entrata</button>
+    <button id="btnUscita" class="btn exit">Uscita</button>
+    <button id="btnNew" class="btn scan">Nuova scansione QR</button>
+  </div>
+  <p id="success"></p><p id="error"></p>
+</div>
+<script>
+let html5QrCode,lastCantiere=null;
+const API_ENDPOINT="/api/save";
+const $=id=>document.getElementById(id);
+const show=id=>$(id).classList.remove('hidden');
+const hide=id=>$(id).classList.add('hidden');
+const setText=(id,txt)=>$(id).innerText=txt;
+function handleQr(text){
+  let c=text.trim().toUpperCase();
+  $("cantiere").value=c; lastCantiere=c;
+  hide("scanArea"); show("formArea");
+}
+async function startCameraScan(){
+  html5QrCode=new Html5Qrcode("reader");
+  await html5QrCode.start({facingMode:"environment"},{fps:10,qrbox:{width:320,height:320}},
+    decoded=>{html5QrCode.stop();handleQr(decoded);}
+  );
+}
+async function send(azione){
+  const nome=$("nome").value.trim();
+  const azienda=$("azienda").value.trim();
+  if(!nome||!azienda){setText("error","Compila Nome e Azienda");return;}
+  const now=new Date();
+  const payload={data:now.toLocaleDateString("it-IT"),ora:now.toLocaleTimeString("it-IT"),
+    nome,azienda,cantiere:lastCantiere,azione};
+  try{
+    const res=await fetch(API_ENDPOINT,{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    if(!res.ok)throw new Error(await res.text());
+    setText("success",azione==="ENTRATA"?"Entrata registrata ✅":"Uscita registrata ✅");
+  }catch(e){setText("error","Errore: "+e.message);}
+}
+$("startScan").onclick=startCameraScan;
+$("btnEntrata").onclick=()=>send("ENTRATA");
+$("btnUscita").onclick=()=>send("USCITA");
+$("btnNew").onclick=()=>{show("scanArea");hide("formArea");$("nome").value="";$("azienda").value="";setText("error","");setText("success","");};
+</script>
+</body>
+</html>
